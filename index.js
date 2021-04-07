@@ -1,7 +1,4 @@
 const axios = require('axios').default;
-const {
-    privateKeyToAddress
-} = require('./functions.js');
 const config = require('./config.json');
 let excel = require('excel4node');
 
@@ -38,6 +35,7 @@ async function check_validation_rewards(address, epoch) {
                 balance += parseFloat(reward.balance);
                 stake += parseFloat(reward.stake);
             });
+
             return {
                 "balance": balance,
                 "stake": stake
@@ -58,6 +56,25 @@ async function check_validation_rewards(address, epoch) {
     }
 }
 
+async function check_balance(address) {
+    try {
+        let response = await axios.get(`http://api.idena.io/api/Address/${address}`);
+        if (response.data.result) {
+            return response.data.result
+        } else {
+            return null
+        }
+
+    } catch (error) {
+        return null
+    }
+}
+
+
+
+
+
+
 async function createExcel() {
     var workbook = new excel.Workbook();
     var worksheet = workbook.addWorksheet('Sheet 1');
@@ -71,32 +88,43 @@ async function createExcel() {
     worksheet.cell(1, 7).string("Long");
     worksheet.cell(1, 8).string("Total");
     worksheet.cell(1, 9).string("State");
-    config.delegators_privatekeys.forEach(async (privateKey, identity_index) => {
-        let identity_result = await check_validation_results(privateKeyToAddress(privateKey), epoch);
-        let identity_validatin_rewards = await check_validation_rewards(privateKeyToAddress(privateKey), epoch);
-        if (identity_result) {
-            let cellIndex = identity_index + 2;
-            worksheet.cell(cellIndex, 1).string(`http://api.idena.io/api/Epoch/${epoch}/Identity/${privateKeyToAddress(privateKey)}`);
-            worksheet.cell(cellIndex, 2).string(parseFloat(identity_validatin_rewards.balance).toFixed(2));
-            worksheet.cell(cellIndex, 3).string(parseFloat(identity_validatin_rewards.stake).toFixed(2));
-            worksheet.cell(cellIndex, 4).string(parseFloat(identity_result.totalValidationReward).toFixed(2));
-            if (identity_result.approved && !identity_result.missed) {
-                worksheet.cell(cellIndex, 5).string("Successful Validation");
-                worksheet.cell(cellIndex, 6).string((parseFloat(identity_result.shortAnswers.point / identity_result.shortAnswers.flipsCount) * 100).toFixed(2) + '%' + `(${identity_result.shortAnswers.point}/${identity_result.shortAnswers.flipsCount})`); // short answers
-                worksheet.cell(cellIndex, 7).string((parseFloat(identity_result.longAnswers.point / identity_result.longAnswers.flipsCount) * 100).toFixed(2) + '%' + `(${identity_result.longAnswers.point}/${identity_result.longAnswers.flipsCount})`); // long answers
+    worksheet.cell(1, 10).string("BalanceAccount");
+    worksheet.cell(1, 11).string("StakeAccount");
+
+    config.delegators_pubaddress.forEach(async (pubaddress, identity_index) => {
+        setTimeout(async function () {
+            console.log(`Checking : ${pubaddress} - ${identity_index + 1} out of ${config.delegators_pubaddress.length}`);
+            let identity_result = await check_validation_results(pubaddress, epoch);
+            let identity_validatin_rewards = await check_validation_rewards(pubaddress, epoch);
+            let identity_balance = await check_balance(pubaddress);
+            if (identity_result) {
+                let cellIndex = identity_index + 2;
+                worksheet.cell(cellIndex, 1).string(`http://api.idena.io/api/Epoch/${epoch}/Identity/${pubaddress}`);
+                worksheet.cell(cellIndex, 2).string(parseFloat(identity_validatin_rewards.balance).toFixed(2));
+                worksheet.cell(cellIndex, 3).string(parseFloat(identity_validatin_rewards.stake).toFixed(2));
+                worksheet.cell(cellIndex, 4).string(parseFloat(identity_result.totalValidationReward).toFixed(2));
+                worksheet.cell(cellIndex, 10).string(parseFloat(identity_balance.balance).toFixed(2));
+                worksheet.cell(cellIndex, 11).string(parseFloat(identity_balance.stake).toFixed(2));
+
+                if (identity_result.approved && !identity_result.missed) {
+                    worksheet.cell(cellIndex, 5).string("Successful Validation");
+                    worksheet.cell(cellIndex, 6).string((parseFloat(identity_result.shortAnswers.point / identity_result.shortAnswers.flipsCount) * 100).toFixed(2) + '%' + `(${identity_result.shortAnswers.point}/${identity_result.shortAnswers.flipsCount})`);
+                    worksheet.cell(cellIndex, 7).string((parseFloat(identity_result.longAnswers.point / identity_result.longAnswers.flipsCount) * 100).toFixed(2) + '%' + `(${identity_result.longAnswers.point}/${identity_result.longAnswers.flipsCount})`);
+                } else {
+                    worksheet.cell(cellIndex, 5).string("Missed Validation");
+                }
+                worksheet.cell(cellIndex, 8).string((parseFloat(identity_result.totalShortAnswers.point / identity_result.totalShortAnswers.flipsCount) * 100).toFixed(2) + '%' + `(${identity_result.totalShortAnswers.point}/${identity_result.totalShortAnswers.flipsCount})`);
+                worksheet.cell(cellIndex, 9).string(identity_result.state);
             } else {
-                worksheet.cell(cellIndex, 5).string("Missed Validation");
+                let cellIndex = identity_index + 2;
+                worksheet.cell(cellIndex, 1).string(`http://api.idena.io/api/Epoch/${epoch}/Identity/${pubaddress}`);
+                worksheet.cell(cellIndex, 5).string("Not a valid identity");
+
             }
-            worksheet.cell(cellIndex, 8).string((parseFloat(identity_result.totalShortAnswers.point / identity_result.totalShortAnswers.flipsCount) * 100).toFixed(2) + '%' + `(${identity_result.totalShortAnswers.point}/${identity_result.totalShortAnswers.flipsCount})`); // total score
-            worksheet.cell(cellIndex, 9).string(identity_result.state);
-        } else {
-            let cellIndex = identity_index + 2;
-            worksheet.cell(cellIndex, 1).string(`http://api.idena.io/api/Epoch/${epoch}/Identity/${privateKeyToAddress(privateKey)}`);
-            worksheet.cell(cellIndex, 5).string("Not a valid identity");
 
-        }
+            workbook.write('excel2.xlsx');
 
-        workbook.write('excel2.xlsx');
+        }, 500 * identity_index);
     });
 
 

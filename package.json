@@ -1,8 +1,6 @@
 {
   "dependencies": {
     "axios": "^0.21.1",
-    "excel4node": "^1.7.2",
-    "js-sha3": "^0.8.0",
-    "secp256k1": "^4.0.2"
+    "excel4node": "^1.7.2"
   }
 }
